@@ -1,17 +1,29 @@
 #include "Game.hpp"
 
 #include "Connection.hpp"
+#include "Load.hpp"
+#include "gl_errors.hpp"
+#include "data_path.hpp"
+#include "hex_dump.hpp"
 
 #include <stdexcept>
 #include <iostream>
 #include <cstring>
 
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/quaternion.hpp>
+#include <glm/gtx/string_cast.hpp>
+#include <random>
+
 #include <glm/gtx/norm.hpp>
+
+
 
 void Player::Controls::send_controls_message(Connection *connection_) const {
 	assert(connection_);
 	auto &connection = *connection_;
 
+	
 	uint32_t size = 5;
 	connection.send(Message::C2S_Controls);
 	connection.send(uint8_t(size));
@@ -25,19 +37,36 @@ void Player::Controls::send_controls_message(Connection *connection_) const {
 		connection.send(uint8_t( (b.pressed ? 0x80 : 0x00) | (b.downs & 0x7f) ) );
 	};
 
+	//connection.send(playerpos.x);
+	//connection.send(playerpos.y);
+	//connection.send(playerpos.z);
+	/*connection.send(playerrot.w);
+	connection.send(playerrot.x);
+	connection.send(playerrot.y);
+	connection.send(playerrot.z); */
+
+
+	//std::cout << "DEBUG -- SEND POS" <<playerpos.x << std::endl;
 	send_button(left);
 	send_button(right);
 	send_button(up);
 	send_button(down);
-	send_button(jump);
+	send_button(jump); 
+	//connection.send(motion);
+
+	
+	
+	
 }
 
 bool Player::Controls::recv_controls_message(Connection *connection_) {
+	
 	assert(connection_);
 	auto &connection = *connection_;
-
 	auto &recv_buffer = connection.recv_buffer;
 
+	
+	
 	//expecting [type, size_low0, size_mid8, size_high8]:
 	if (recv_buffer.size() < 4) return false;
 	if (recv_buffer[0] != uint8_t(Message::C2S_Controls)) return false;
@@ -59,11 +88,36 @@ bool Player::Controls::recv_controls_message(Connection *connection_) {
 		button->downs = uint8_t(d);
 	};
 
+
+	auto recv_mouse = [](uint8_t *byte, float *motion) {
+	
+	*motion = float(*byte); 
+							
+	
+	};
+
+
+	//playerpos.x = float(recv_buffer[4+0]);
+	//playerpos.y = float(recv_buffer[4+4]);
+	//playerpos.z = float(recv_buffer[4+8]);
+	/*playerrot.w = float(recv_buffer[4+12]);
+	playerrot.x = float(recv_buffer[4+16]);
+	playerrot.y = float(recv_buffer[4+20]);
+	playerrot.z = float(recv_buffer[4+24]); */
+
+	//playerrot = glm::highp_quat();
+
+	/*std::cout << "DEBUG -- RECV POS " << float(recv_buffer[4+0]) << std::endl;
+	std::cout << "DEBUG -- RECV POS " << float(recv_buffer[4+8]) << std::endl;
+	std::cout << "DEBUG -- RECV POS " << float(recv_buffer[4+12]) << std::endl; */
 	recv_button(recv_buffer[4+0], &left);
 	recv_button(recv_buffer[4+1], &right);
 	recv_button(recv_buffer[4+2], &up);
 	recv_button(recv_buffer[4+3], &down);
 	recv_button(recv_buffer[4+4], &jump);
+	//recv_mouse(&recv_buffer[4+5], &motion);
+
+	
 
 	//delete message from buffer:
 	recv_buffer.erase(recv_buffer.begin(), recv_buffer.begin() + 4 + size);
@@ -74,30 +128,24 @@ bool Player::Controls::recv_controls_message(Connection *connection_) {
 
 //-----------------------------------------
 
+
 Game::Game() : mt(0x15466666) {
+
 }
 
 Player *Game::spawn_player() {
+	
 	players.emplace_back();
 	Player &player = players.back();
-
-	//random point in the middle area of the arena:
-	player.position.x = glm::mix(ArenaMin.x + 2.0f * PlayerRadius, ArenaMax.x - 2.0f * PlayerRadius, 0.4f + 0.2f * mt() / float(mt.max()));
-	player.position.y = glm::mix(ArenaMin.y + 2.0f * PlayerRadius, ArenaMax.y - 2.0f * PlayerRadius, 0.4f + 0.2f * mt() / float(mt.max()));
-
-	do {
-		player.color.r = mt() / float(mt.max());
-		player.color.g = mt() / float(mt.max());
-		player.color.b = mt() / float(mt.max());
-	} while (player.color == glm::vec3(0.0f));
-	player.color = glm::normalize(player.color);
-
-	player.name = "Player " + std::to_string(next_player_number++);
-
+	player.duck.setTransforms();
+	player.duck.setAnimations();
+	player.hasduck = true;
+	std::cout << "DEBUG -- A PLAYER IS SPAWNED" << std::endl;
 	return &player;
 }
 
 void Game::remove_player(Player *player) {
+	
 	bool found = false;
 	for (auto pi = players.begin(); pi != players.end(); ++pi) {
 		if (&*pi == player) {
@@ -110,39 +158,14 @@ void Game::remove_player(Player *player) {
 }
 
 void Game::update(float elapsed) {
+	
 	//position/velocity update:
+	
 	for (auto &p : players) {
-		glm::vec2 dir = glm::vec2(0.0f, 0.0f);
-		if (p.controls.left.pressed) dir.x -= 1.0f;
-		if (p.controls.right.pressed) dir.x += 1.0f;
-		if (p.controls.down.pressed) dir.y -= 1.0f;
-		if (p.controls.up.pressed) dir.y += 1.0f;
-
-		if (dir == glm::vec2(0.0f)) {
-			//no inputs: just drift to a stop
-			float amt = 1.0f - std::pow(0.5f, elapsed / (PlayerAccelHalflife * 2.0f));
-			p.velocity = glm::mix(p.velocity, glm::vec2(0.0f,0.0f), amt);
-		} else {
-			//inputs: tween velocity to target direction
-			dir = glm::normalize(dir);
-
-			float amt = 1.0f - std::pow(0.5f, elapsed / PlayerAccelHalflife);
-
-			//accelerate along velocity (if not fast enough):
-			float along = glm::dot(p.velocity, dir);
-			if (along < PlayerSpeed) {
-				along = glm::mix(along, PlayerSpeed, amt);
-			}
-
-			//damp perpendicular velocity:
-			float perp = glm::dot(p.velocity, glm::vec2(-dir.y, dir.x));
-			perp = glm::mix(perp, 0.0f, amt);
-
-			p.velocity = dir * along + glm::vec2(-dir.y, dir.x) * perp;
-		}
-		p.position += p.velocity * elapsed;
 
 		//reset 'downs' since controls have been handled:
+		
+		p.duck.move(p.controls.up.pressed, p.controls.down.pressed, p.controls.left.pressed,p.controls.right.pressed, elapsed);
 		p.controls.left.downs = 0;
 		p.controls.right.downs = 0;
 		p.controls.up.downs = 0;
@@ -151,6 +174,7 @@ void Game::update(float elapsed) {
 	}
 
 	//collision resolution:
+	/*
 	for (auto &p1 : players) {
 		//player/player collisions:
 		for (auto &p2 : players) {
@@ -183,7 +207,7 @@ void Game::update(float elapsed) {
 			p1.position.y = ArenaMax.y - PlayerRadius;
 			p1.velocity.y =-std::abs(p1.velocity.y);
 		}
-	}
+	} */
 
 }
 
@@ -192,6 +216,8 @@ void Game::send_state_message(Connection *connection_, Player *connection_player
 	assert(connection_);
 	auto &connection = *connection_;
 
+	
+
 	connection.send(Message::S2C_State);
 	//will patch message size in later, for now placeholder bytes:
 	connection.send(uint8_t(0));
@@ -199,18 +225,23 @@ void Game::send_state_message(Connection *connection_, Player *connection_player
 	connection.send(uint8_t(0));
 	size_t mark = connection.send_buffer.size(); //keep track of this position in the buffer
 
+	//helper function for sending the scene over 
 
 	//send player info helper:
 	auto send_player = [&](Player const &player) {
-		connection.send(player.position);
-		connection.send(player.velocity);
-		connection.send(player.color);
-	
-		//NOTE: can't just 'send(name)' because player.name is not plain-old-data type.
-		//effectively: truncates player name to 255 chars
-		uint8_t len = uint8_t(std::min< size_t >(255, player.name.size()));
-		connection.send(len);
-		connection.send_buffer.insert(connection.send_buffer.end(), player.name.begin(), player.name.begin() + len);
+		
+
+		glm::highp_quat matrixrot = *player.duck.ducktransform.animrot;
+		
+
+		glm::vec3 xyzpos = player.duck.ducktransform.playertranslate->position;
+
+		//glm::highp_quat matrixrot = player.controls.playerrot;
+		//glm::vec3 xyzpos = player.controls.playerpos;
+
+		connection.send(xyzpos); //12 BYTES
+		connection.send(matrixrot);//16 BYTES
+
 	};
 
 	//player count:
@@ -232,6 +263,7 @@ bool Game::recv_state_message(Connection *connection_) {
 	assert(connection_);
 	auto &connection = *connection_;
 	auto &recv_buffer = connection.recv_buffer;
+
 
 	if (recv_buffer.size() < 4) return false;
 	if (recv_buffer[0] != uint8_t(Message::S2C_State)) return false;
@@ -257,18 +289,13 @@ bool Game::recv_state_message(Connection *connection_) {
 	for (uint8_t i = 0; i < player_count; ++i) {
 		players.emplace_back();
 		Player &player = players.back();
-		read(&player.position);
-		read(&player.velocity);
-		read(&player.color);
-		uint8_t name_len;
-		read(&name_len);
-		//n.b. would probably be more efficient to directly copy from recv_buffer, but I think this is clearer:
-		player.name = "";
-		for (uint8_t n = 0; n < name_len; ++n) {
-			char c;
-			read(&c);
-			player.name += c;
-		}
+		
+		read(&player.pos);
+		read(&player.rot);
+	
+
+		//*player.duck.ducktransform.animrot = matrixrot;
+		//player.duck.ducktransform.playertranslate->position = xyzpos;
 	}
 
 	if (at != size) throw std::runtime_error("Trailing data in state message.");

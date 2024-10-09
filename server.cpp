@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
 			server.poll([&](Connection *c, Connection::Event evt){
 				if (evt == Connection::OnOpen) {
 					//client connected:
-
+					std::cout << "DEBUG -- player joined" << std::endl;
 					//create some player info for them:
 					connection_to_player.emplace(c, game.spawn_player());
 
@@ -104,9 +104,10 @@ int main(int argc, char **argv) {
 				}
 			}, remain);
 		}
-
+		
 		//update current game state
 		game.update(Game::Tick);
+	
 
 		//send updated game state to all clients
 		for (auto &[c, player] : connection_to_player) {

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
-
+#include "Duck.hpp"
 #include <string>
 #include <list>
 #include <random>
@@ -29,6 +29,9 @@ struct Player {
 	//player inputs (sent from client):
 	struct Controls {
 		Button left, right, up, down, jump;
+		float motion = 0.0f;
+		glm::vec3 playerpos;
+		glm::highp_quat playerrot;
 
 		void send_controls_message(Connection *connection) const;
 
@@ -38,12 +41,26 @@ struct Player {
 		bool recv_controls_message(Connection *connection);
 	} controls;
 
-	//player state (sent from server):
-	glm::vec2 position = glm::vec2(0.0f, 0.0f);
-	glm::vec2 velocity = glm::vec2(0.0f, 0.0f);
+	glm::vec3 pos;
+	glm::highp_quat rot;
 
-	glm::vec3 color = glm::vec3(1.0f, 1.0f, 1.0f);
-	std::string name = "";
+	//position & rotation
+	//player state (sent from server):
+	//glm::vec3
+	//glm::vec2 position = glm::vec2(0.0f, 0.0f);
+	//glm::vec2 velocity = glm::vec2(0.0f, 0.0f);
+	//glm::vec3 color = glm::vec3(1.0f, 1.0f, 1.0f);
+	//std::string name = "";
+
+	//what player states do I need?
+	//mesh data ---> will give position,color, etc.
+	//how do I get mesh data though? and will I need the transforms data as well?
+	//yes!
+	//I think I need to keep track of the player's drawables that are the characters!
+	//Honestly will probably make a separate duck cpp & hpp file
+	Duck duck;
+	bool hasduck = false;
+	
 };
 
 struct Game {
@@ -53,6 +70,8 @@ struct Game {
 
 	std::mt19937 mt; //used for spawning players
 	uint32_t next_player_number = 1; //used for naming players
+
+	
 
 	Game();
 
