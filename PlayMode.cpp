@@ -151,14 +151,14 @@ PlayMode::PlayMode(Client &client_) : client(client_), scene(*ducky_scene) {
 	}
 
 
-	for(int x = 0; x < duckidle.numframes; x++) //duck run
+	/*for(int x = 0; x < duckidle.numframes; x++) //duck run
 	{
 		for(int y =0; y<duckidle.frames[x].size(); y++)
 		{
 			duckidle.frames[x][y]->scale = glm::vec3(0.0f);
 		}
 		
-	}
+	}*/
 
 
 	for (auto &transform : scene.transforms) {
@@ -216,6 +216,9 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 	if (evt.type == SDL_KEYDOWN) {
 		if (evt.key.repeat) {
 			//ignore repeats
+		}if (evt.key.keysym.sym == SDLK_ESCAPE) {
+			SDL_SetRelativeMouseMode(SDL_FALSE);
+			return true;
 		} else if (evt.key.keysym.sym == SDLK_a) {
 			controls.left.downs += 1;
 			controls.left.pressed = true;
@@ -254,11 +257,16 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			controls.jump.pressed = false;
 			return true;
 		}
+	} else if (evt.type == SDL_MOUSEBUTTONDOWN) {
+		if (SDL_GetRelativeMouseMode() == SDL_FALSE) {
+			SDL_SetRelativeMouseMode(SDL_TRUE);
+			return true;
+	}
 	}else if (evt.type == SDL_MOUSEMOTION) {
+		
 		if (SDL_GetRelativeMouseMode() == SDL_TRUE) {
 			//controls.motion = evt.motion.xrel / float(window_size.y); //get the motion of the mouse
 			//rotateholdx = controls.motion;
-
 			glm::vec3 upDir(0.0f,0.0f, 1.0f);
 			if(rotateholdx >= 6.0f || rotateholdx <= -6.0f)
 			rotateholdx = 0.0f;
@@ -291,7 +299,7 @@ void PlayMode::update(float elapsed) {
 		//combine inputs into a move:
 		playeranimtimer += elapsed;
 
-
+		animtype = 0;
 		constexpr float PlayerSpeed = 20.0f;
 		glm::vec2 move = glm::vec2(0.0f);
 		if (controls.left.pressed && !controls.right.pressed) move.x =1.0f;
@@ -301,7 +309,8 @@ void PlayMode::update(float elapsed) {
 
 		if(move.x != 0 || move.y != 0)
 		{
-			/*if(!duckrotated)
+			animtype = 1;
+			if(!duckrotated)
 			playeranimtimer = 1.0f;
 
 			if(playeranimtimer >= (1.0f/duckrun.fps)) //make duck run!
@@ -310,6 +319,7 @@ void PlayMode::update(float elapsed) {
 				duckrun.currframe +=1;
 				if(duckrun.currframe >= duckrun.frames.size())
 				duckrun.currframe = 0;
+				animframe = duckrun.currframe;
 			}
 
 			for(int x =0; x<duckrun.frames.size(); x++)
@@ -328,7 +338,7 @@ void PlayMode::update(float elapsed) {
 					duckidle.frames[x][y]->scale = glm::vec3(0.0f);
 				}
 				
-			} */
+			} 
 
 	
 			float rotateval = ((rotateholdx)/6.0f) * float(M_PI) * 2.0f;
@@ -376,8 +386,8 @@ void PlayMode::update(float elapsed) {
 		}
 		else
 		{
-		
-			/*if(duckrotated)
+			animtype = 0;
+			if(duckrotated)
 				playeranimtimer = 1.0f;
 		
 			
@@ -387,6 +397,7 @@ void PlayMode::update(float elapsed) {
 				duckidle.currframe +=1;
 				if(duckidle.currframe >= duckidle.frames.size())
 				duckidle.currframe = 0;
+				animframe = duckidle.currframe;
 
 			}
 
@@ -407,7 +418,7 @@ void PlayMode::update(float elapsed) {
 					duckrun.frames[x][y]->scale = glm::vec3(0.0f);
 				}
 				
-			} */
+			} 
 
 			duckrotated = false;
 		} 
@@ -501,15 +512,12 @@ void PlayMode::update(float elapsed) {
 	}
 	
 	
-	
-	//controls.playerpos = playertranslate->position;
-	//controls.playerrot = *animrot;
+	controls.playerpos = playertranslate->position;
+	controls.playerrot = *animrot * playertranslate -> rotation;
+	controls.playeranim = animtype;
+	controls.playerframe = animframe;
 	//queue data for sending to server:
-
-	/*std::cout << "DEBUG -- CLIENT POS" <<glm::to_string( controls.playerpos) << std::endl;
-	std::cout << "DEBUG -- CLIENT ROT" <<glm::to_string( controls.playerrot)  << std::endl;
-	std::cout << std::endl;
-	std::cout << std::endl; */
+	
 
 	controls.send_controls_message(&client.connection);
 
@@ -532,7 +540,7 @@ void PlayMode::update(float elapsed) {
 			std::cout << "[" << c->socket << "] closed (!)" << std::endl;
 			throw std::runtime_error("Lost connection to server!");
 		} else { assert(event == Connection::OnRecv);
-			std::cout << "[" << c->socket << "] recv'd data. Current buffer:\n" << hex_dump(c->recv_buffer); std::cout.flush(); //DEBUG
+			//std::cout << "[" << c->socket << "] recv'd data. Current buffer:\n" << hex_dump(c->recv_buffer); std::cout.flush(); //DEBUG
 			bool handled_message;
 			try {
 				do {
@@ -555,48 +563,48 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	//for draw, we want to emplace_back drawables that might be added to the scene (such as players)
 	//so each player should keep track of its mesh
 	int pcount = 0;
+
 	for (auto const &p : game.players) {
 		
-		//std::cout << "DEBUG -- PLAYER POS" <<glm::to_string( p.pos) << "PLAYER -- " << pcount << std::endl;
-		//std::cout << "DEBUG -- PLAYER ROT" <<glm::to_string( p.rot) << "PLAYER -- " << pcount << std::endl;
-
-		//std::cout <<std::endl;
-		
-	
-		Mesh testmesh;
-		testmesh = ducky_meshes->lookup("idleanimframe1");
-		
-
-		Scene::Transform *newtrans;
-		scene.transforms.emplace_back();
-		scene.transforms.back().position = p.pos;
-		scene.transforms.back().rotation = p.rot;
-		newtrans = &scene.transforms.back();
-		//newtrans.position = p.pos;
-		//newtrans.rotation = p.rot;
-	
+		if(pcount > 0)
 		{
 			
-			scene.drawables.emplace_back(newtrans);
-			Scene::Drawable &drawable = scene.drawables.back();
-			drawable.pipeline = lit_color_texture_program_pipeline;
-			drawable.pipeline.vao = ducky_meshes_for_lit_color_texture_program; 
-			drawable.pipeline.type = testmesh.type; 
-			drawable.pipeline.start = testmesh.start;
-			drawable.pipeline.count = testmesh.count;
+			Mesh mesh;
+			std::string getframe;
+
+			int frame = p.playerframe + 1;
+			std::cout << frame << std::endl;
+			if(p.playeranim == 1)
+			{
+				if(frame > 13)
+				frame = 13;
+				getframe = "runanimframe" + std::to_string(frame);
+			}
+			else
+			{
+				if(frame > 14)
+				frame = 14;
+				getframe = "idleanimframe" + std::to_string(frame);
+				
+			}
+				
+			mesh = ducky_meshes->lookup(getframe);
+			
+			scene.transforms.emplace_back();
+			scene.transforms.back().position = p.pos;
+			scene.transforms.back().rotation = p.rot;
+			{
+				scene.drawables.emplace_back(&scene.transforms.back());
+				Scene::Drawable &drawable = scene.drawables.back();
+				drawable.pipeline = lit_color_texture_program_pipeline;
+				drawable.pipeline.vao = ducky_meshes_for_lit_color_texture_program; 
+				drawable.pipeline.type = mesh.type; 
+				drawable.pipeline.start = mesh.start;
+				drawable.pipeline.count = mesh.count;
+			}
+
+
 		}
-
-		//client also has itself -- I guess client should just store the scene and 
-		/*scene.drawables.emplace_back(p.duck.ducktransform);
-		Scene::Drawable &drawable = scene.drawables.back();
-
-		drawable.pipeline = lit_color_texture_program_pipeline;
-
-		drawable.pipeline.vao = ducky_meshes_for_lit_color_texture_program; */
-		//drawable.pipeline.type = mesh.type; 
-		//drawable.pipeline.start = mesh.start;
-		//drawable.pipeline.count = mesh.count;
-
 		pcount ++;
 		
 	}
@@ -620,7 +628,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 
 	scene.draw(*player.camera);
 
-	for(int i = 0; i < pcount; i++)
+	for(int i = 0; i < pcount - 1; i++)
 	{
 		scene.drawables.pop_back();
 		scene.transforms.pop_back();

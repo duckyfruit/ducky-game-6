@@ -3,16 +3,14 @@ BLENDER="C:\Program Files\Blender Foundation\Blender 4.2\blender.exe"
 DIST=../dist
 
 all : \
-    $(DIST)/backgroundscene.pnct \
-    $(DIST)/backgroundscene.scene \
-    $(DIST)/backgroundscene.w \
+    $(DIST)/duckyframes.pnct \
+    $(DIST)/duckyframes.scene \
 
 
-$(DIST)/backgroundscene.scene : backgroundscene.blend export-scene.py
-    $(BLENDER) --background --python export-scene.py -- "backgroundscene.blend:Platforms" "$(DIST)/backgroundscene.scene"
+$(DIST)/duckyframes.scene : duckyframes.blend export-scene.py
+    $(BLENDER) --background --python export-scene.py -- "duckyframes.blend:Platforms" "$(DIST)/duckyframes.scene"
 
-$(DIST)/backgroundscene.pnct : backgroundscene.blend export-meshes.py
-    $(BLENDER) --background --python export-meshes.py -- "backgroundscene.blend:Platforms" "$(DIST)/backgroundscene.pnct" 
+$(DIST)/duckyframes.pnct : duckyframes.blend export-meshes.py
+    $(BLENDER) --background --python export-meshes.py -- "duckyframes.blend:Platforms" "$(DIST)/duckyframes.pnct" 
 
-$(DIST)/backgroundscene.w : backgroundscene.blend export-walkmeshes.py
-    $(BLENDER) --background --python export-walkmeshes.py -- "backgroundscene.blend:WalkMeshes" "$(DIST)/backgroundscene.w" 
+

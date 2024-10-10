@@ -11,6 +11,10 @@
 #include <cassert>
 #include <unordered_map>
 
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/quaternion.hpp>
+#include <glm/gtx/string_cast.hpp>
+
 #ifdef _WIN32
 extern "C" { uint32_t GetACP(); }
 #endif
@@ -72,7 +76,9 @@ int main(int argc, char **argv) {
 					//client connected:
 					std::cout << "DEBUG -- player joined" << std::endl;
 					//create some player info for them:
+					//std::cout <<"DEBUG -- BEFORE PLAYER JOINED SIZE" << glm::to_string(game.players.begin()->rot) << std::endl;
 					connection_to_player.emplace(c, game.spawn_player());
+					//std::cout <<"DEBUG -- AFTER PLAYER JOINED 0" << glm::to_string(game.players.begin()->rot) << std::endl;
 
 				} else if (evt == Connection::OnClose) {
 					//client disconnected:

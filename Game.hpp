@@ -32,6 +32,8 @@ struct Player {
 		float motion = 0.0f;
 		glm::vec3 playerpos;
 		glm::highp_quat playerrot;
+		int playeranim;
+		int playerframe;
 
 		void send_controls_message(Connection *connection) const;
 
@@ -43,6 +45,10 @@ struct Player {
 
 	glm::vec3 pos;
 	glm::highp_quat rot;
+	int playeranim;
+	int playerframe;
+
+	bool it;
 
 	//position & rotation
 	//player state (sent from server):

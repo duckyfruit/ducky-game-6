@@ -64,9 +64,12 @@ struct PlayMode : Mode {
 	float rotateholdx;
 	bool duckrotated = false;
 	glm::highp_quat pastrotation;
+	
+	
+	int animtype;
+	int animframe;
 
-
-
+	
 	//player info:
 	struct Player {
 		WalkPoint at;
