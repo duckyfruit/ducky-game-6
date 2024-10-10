@@ -70,7 +70,16 @@ void DrawLines::draw(glm::vec3 const &a, glm::vec3 const &b, glm::u8vec4 const &
 	attribs.emplace_back(a, color);
 	attribs.emplace_back(b, color);
 }
+void DrawLines::draw_rect(glm::mat4x3 const &mat,glm::u8vec4 const &color) {
+	attribs.emplace_back(mat[0], color);
+	attribs.emplace_back(mat[1], color);
+	attribs.emplace_back(mat[2], color);
 
+
+	attribs.emplace_back(mat[3], color);
+	attribs.emplace_back(mat[1], color);
+	attribs.emplace_back(mat[2], color);
+}
 void DrawLines::draw_box(glm::mat4x3 const &mat, glm::u8vec4 const &color) {
 	//draw cube as three edge sets:
 

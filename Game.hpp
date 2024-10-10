@@ -34,6 +34,8 @@ struct Player {
 		glm::highp_quat playerrot;
 		int playeranim;
 		int playerframe;
+		int ateapple;
+		int applenum;
 
 		void send_controls_message(Connection *connection) const;
 
@@ -45,10 +47,12 @@ struct Player {
 
 	glm::vec3 pos;
 	glm::highp_quat rot;
+	int ateapple;
 	int playeranim;
 	int playerframe;
+	int applenum;
 
-	bool it;
+	Duck duck;
 
 	//position & rotation
 	//player state (sent from server):
@@ -64,8 +68,6 @@ struct Player {
 	//yes!
 	//I think I need to keep track of the player's drawables that are the characters!
 	//Honestly will probably make a separate duck cpp & hpp file
-	Duck duck;
-	bool hasduck = false;
 	
 };
 

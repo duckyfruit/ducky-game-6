@@ -13,14 +13,147 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <random>
-
-#include <random>
 #include <array>
+
+
+#include <hb.h>
+#include <hb-ot.h>
+
+#include <ft2build.h>
+#include FT_FREETYPE_H
 
 //Gameplan; render out the scene and yourself first; then emplace back drawables of all the players
 //and their locations
 
 //CREATE THE BACKGROUND SCENE AND YOURSELF//
+void setfont(char* test, glm::vec3 anchor,glm::uvec2 const &drawable_size, glm::vec4 color, float boxwidth, float boxheight, bool scrolldialogue, int &scrolldialogueindex) //display text of the specified index
+{
+	glDisable(GL_DEPTH_TEST);
+	float aspect = float(drawable_size.x) / float(drawable_size.y);
+	DrawLines lines(glm::mat4(
+			1.0f / aspect, 0.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f, 0.0f,
+			0.0f, 0.0f, 1.0f, 0.0f,
+			0.0f, 0.0f, 0.0f, 1.0f
+	));
+
+	char *fontfile;
+	char *text;
+	
+	const float pixelwidth = 128.0f;
+	const float resolution = 1024.0f;
+	const float beglinex = anchor.x;
+	const float begliney = anchor.y;
+
+	fontfile = "PressStart.ttf";
+	text = test;
+
+
+	FT_Library  library;   /* handle to library     */
+	FT_Face     face;  
+	 
+	FT_Init_FreeType( &library );
+	FT_New_Face( library, fontfile, 0, &face );
+	
+	FT_Set_Pixel_Sizes( face, uint8_t(pixelwidth), uint8_t(pixelwidth));   /* pixel_height          */
+	FT_GlyphSlot  slot = face->glyph;
+
+	FT_Select_Charmap(
+          face,               /* target face object */
+          FT_ENCODING_BIG5 );
+
+	//Look into freetype
+	
+	/* And converted to absolute positions. */
+	{
+		
+		for (int i = 0; i < strlen(test); i++)
+		{
+			if(!scrolldialogue)
+			{
+				FT_Load_Char(face,test[i], FT_LOAD_RENDER); //load the character
+				if(test[i] == '\n') //newline!
+				{
+					if((i != strlen(test) - 1))
+					{
+						anchor.y -= (1/resolution *pixelwidth)*1.0f;
+						anchor.x = beglinex;
+					}
+					
+					FT_Load_Char( face, 32 , FT_LOAD_RENDER); //load a space instead
+					
+				}
+
+				
+				float origX = anchor.x;
+				float origY = anchor.y;
+				
+				for(int y = (slot->bitmap.rows - 1); y >= 0 ; y--)
+				{
+					for(uint32_t x = 0; x < (slot->bitmap.width); x++)
+					{
+						if(slot->bitmap.buffer[y*slot->bitmap.width+ x])
+						{
+							glm::vec3 anchordup1 = anchor;
+							glm::vec3 anchordup2 = anchor;
+							glm::vec3 anchordup3 = anchor;
+							anchordup1.x += 1/resolution;
+							anchordup2.y += 1/resolution;
+							anchordup3.x += 1/resolution;
+							anchordup3.y += 1/resolution;
+
+							glm::mat4x3 mat(anchor,anchordup1,anchordup2,anchordup3);
+							
+							lines.draw_rect(mat,color);
+						}
+						
+						
+						anchor.x += 1/resolution;
+						
+					}
+					anchor.y += 1/resolution;
+					anchor.x = origX;
+				
+				}
+
+				anchor.x += (1/resolution *slot->bitmap.width)*1.0f + 1/resolution * 4.0f;
+				anchor.y = origY;
+
+				//if we wanted to shake, move y in a sinusoid function
+
+				if(test[i] == ' ') //space!
+				{
+					anchor.x += (1/resolution *pixelwidth)/2.0f;	
+					
+				}
+
+				if(abs(anchor.x) - abs(beglinex)> boxwidth) //if we have extended past the width of the box
+				{
+					anchor.y -= (1/resolution *pixelwidth)*1.0f;
+					anchor.x = beglinex;	
+				}
+
+				
+				if(abs(anchor.y)- abs(begliney)> boxheight) //if we have extended past the height of the box
+				{
+					//set pause render at the index of the string
+					//when space is pressed resume at the index
+					
+					scrolldialogue = true;
+					scrolldialogueindex = i;
+					anchor.y = begliney;
+					anchor.x = beglinex;
+				}
+	
+			}
+		}
+		scrolldialogue = true;
+	}
+
+	FT_Done_Face    ( face );
+  	FT_Done_FreeType( library );
+
+}
 
 GLuint background_meshes_for_lit_color_texture_program = 0;
 Load< MeshBuffer > background_meshes(LoadTagDefault, []() -> MeshBuffer const * {
@@ -69,6 +202,17 @@ Load< Scene > ducky_scene(LoadTagDefault, []() -> Scene const * {
 });
 
 PlayMode::PlayMode(Client &client_) : client(client_), scene(*ducky_scene) {
+	
+	//For every mesh with the tag "apple"
+	//put transform back and int (1) in a vector
+	//if the int is 1, that means the apple has not been eaten
+	//if the int is 0, that means the apple has been eaten
+	//set the scale of that transform to 0 for all players
+	//increment the score 
+	//winner is whoever eats the most apples when all apples are gone
+	
+	
+	
 	duckrun.numframes = 13;
 
 	for(int x =0; x< duckrun.numframes; x++) //number of total frames for duckrun
@@ -150,17 +294,6 @@ PlayMode::PlayMode(Client &client_) : client(client_), scene(*ducky_scene) {
 
 	}
 
-
-	/*for(int x = 0; x < duckidle.numframes; x++) //duck run
-	{
-		for(int y =0; y<duckidle.frames[x].size(); y++)
-		{
-			duckidle.frames[x][y]->scale = glm::vec3(0.0f);
-		}
-		
-	}*/
-
-
 	for (auto &transform : scene.transforms) {
 		if (transform.name.find("Player") != -1) 
 			playertranslate = &transform;
@@ -169,7 +302,19 @@ PlayMode::PlayMode(Client &client_) : client(client_), scene(*ducky_scene) {
 			Scene::Transform*temp = &transform;
 			animrot =  &temp->rotation;
 		}
+		else if(transform.name.find("Apple") != -1) 
+		{
+			applepos.emplace_back(&transform);
+			apples.emplace_back(uint8_t(1));
+		}
+			
 	} 
+
+
+	//for the transforms in the scene
+	//if transform.name.find("apple")
+	//emplace back transform in applepos vector
+	//emplace back int 1 in apple vetor
 
 	scene.transforms.emplace_back();
 	scene.cameras.emplace_back(&scene.transforms.back());
@@ -293,7 +438,8 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 }
 
 void PlayMode::update(float elapsed) {
-
+	controls.ateapple = 0;
+	controls.applenum = -1;
 	//player walking:
 	{
 		//combine inputs into a move:
@@ -511,11 +657,46 @@ void PlayMode::update(float elapsed) {
 
 	}
 	
+	//player touches apple
+	{
+		for(int i = 0; i < applepos.size(); i++)
+		{
+			float radius = 20.0f;
+			if(playertranslate->position.x > applepos[i]->position.x - radius &&
+			playertranslate->position.x < applepos[i]->position.x + radius &&
+			playertranslate->position.y > applepos[i]->position.y - radius &&
+			playertranslate->position.y < applepos[i]->position.y + radius&& 
+			apples[i] == 1 )
+			{
+				apples[i] = uint8_t(0);
+				applepos[i]->scale = glm::vec3(0.0f);
+				std::cout << glm::to_string(playertranslate->position) << std::endl;
+				std::cout << glm::to_string(applepos[i]->position) << std::endl;
+				std::cout<<std::endl;
+				controls.ateapple = 1;
+				controls.applenum = i;
+				score += 1;
+			}
+		}
+	} 
+	
+	//if player position is within range of apple & apple is not 0 in apple vector
+	//make apple 0 in apple vector 
+	//set scale apple to 0
+	
 	
 	controls.playerpos = playertranslate->position;
 	controls.playerrot = *animrot * playertranslate -> rotation;
 	controls.playeranim = animtype;
 	controls.playerframe = animframe;
+	
+
+	
+
+
+
+	//controls.apple = apple vector
+	//send apple vector to server
 	//queue data for sending to server:
 	
 
@@ -527,6 +708,8 @@ void PlayMode::update(float elapsed) {
 	controls.up.downs = 0;
 	controls.down.downs = 0;
 	controls.jump.downs = 0;
+	controls.ateapple = 0;
+	controls.applenum = -1;
 
 
 
@@ -555,7 +738,14 @@ void PlayMode::update(float elapsed) {
 		}
 	}, 0.0); 
 
-	//std::cout << controls.motion << std::endl; 
+	//std::cout << controls.motion << std::endl;
+
+	//std::cout << "made it to apple playmode" << std::endl; 
+	
+	//for &p : game.players
+	//for all apples in apple vector
+	//set apples with int 0 at a scale of 0
+	//set client apple vector to player apple vector (& operation)
 }
 
 void PlayMode::draw(glm::uvec2 const &drawable_size) {
@@ -603,6 +793,20 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 				drawable.pipeline.count = mesh.count;
 			}
 
+		
+			if(p.ateapple == 1)
+			{
+				if(p.applenum >= 0)
+				{
+					apples[p.applenum] = 0;
+					applepos[p.applenum]->scale = glm::vec3(0.0f);
+
+				}
+				
+			} 
+			
+		
+
 
 		}
 		pcount ++;
@@ -627,6 +831,23 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	glDepthFunc(GL_LESS); //this is the default depth comparison function, but FYI you can change it.
 
 	scene.draw(*player.camera);
+
+
+	{ //use DrawLines to overlay some text:
+		glDisable(GL_DEPTH_TEST);
+		float aspect = float(drawable_size.x) / float(drawable_size.y);
+		DrawLines lines(glm::mat4(
+			1.0f / aspect, 0.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f, 0.0f,
+			0.0f, 0.0f, 1.0f, 0.0f,
+			0.0f, 0.0f, 0.0f, 1.0f
+		));
+
+		constexpr float H = 0.09f;
+		glm::vec4 textcolor(0x00,0x00,0x00,0xff); //black text color
+		int noscroll = 0;
+		setfont(&std::to_string(score)[0],glm::vec3(0.0f - H, 0.75f, 0.0), drawable_size,textcolor, 1.0f, 1.0f,0,noscroll);
+	}
 
 	for(int i = 0; i < pcount - 1; i++)
 	{

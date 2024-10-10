@@ -69,7 +69,12 @@ struct PlayMode : Mode {
 	int animtype;
 	int animframe;
 
-	
+	std::vector<uint8_t> apples;
+	std::vector<Scene::Transform*> applepos;
+
+	int score = 0;
+
+
 	//player info:
 	struct Player {
 		WalkPoint at;

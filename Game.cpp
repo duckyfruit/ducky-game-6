@@ -21,8 +21,9 @@ void Player::Controls::send_controls_message(Connection *connection_) const {
 	assert(connection_);
 	auto &connection = *connection_;
 
+	uint32_t size = 44;
+
 	
-	uint32_t size = 36;
 	connection.send(Message::C2S_Controls);
 	connection.send(uint8_t(size));
 	connection.send(uint8_t(size >> 8));
@@ -44,8 +45,9 @@ void Player::Controls::send_controls_message(Connection *connection_) const {
 	connection.send(playerrot.z); 
 	connection.send(playeranim);
 	connection.send(playerframe);
+	connection.send(ateapple);
+	connection.send(applenum);
 
-	
 }
 
 bool Player::Controls::recv_controls_message(Connection *connection_) {
@@ -54,15 +56,14 @@ bool Player::Controls::recv_controls_message(Connection *connection_) {
 	auto &connection = *connection_;
 	auto &recv_buffer = connection.recv_buffer;
 
-	
-	
+
 	//expecting [type, size_low0, size_mid8, size_high8]:
 	if (recv_buffer.size() < 4) return false;
 	if (recv_buffer[0] != uint8_t(Message::C2S_Controls)) return false;
 	uint32_t size = (uint32_t(recv_buffer[3]) << 16)
 	              | (uint32_t(recv_buffer[2]) << 8)
 	              |  uint32_t(recv_buffer[1]);
-	if (size != 36) throw std::runtime_error("Controls message with size " + std::to_string(size) + " != 36!");
+	if (size != 44) throw std::runtime_error("Controls message with size " + std::to_string(size) + " != 48!");
 	
 	//expecting complete message:
 	if (recv_buffer.size() < 4 + size) return false;
@@ -78,13 +79,7 @@ bool Player::Controls::recv_controls_message(Connection *connection_) {
 	};
 
 
-
-	auto recv_mouse = [](uint8_t *byte, float *motion) {
-	
-	*motion = float(*byte); 
-							
-	
-	};
+	//std::cout << "hello!!" <<std::endl;
 
 
 	float* xpos = reinterpret_cast<float*>(&recv_buffer[4+0]);
@@ -107,7 +102,17 @@ bool Player::Controls::recv_controls_message(Connection *connection_) {
 	playeranim = *anim;
 	int* frame = reinterpret_cast<int*>(&recv_buffer[4+32]);
 	playerframe = *frame;
+   
+	int* ate = reinterpret_cast<int*>(&recv_buffer[4+36]);
+	ateapple = *ate;
 
+
+	int* aplnum = reinterpret_cast<int*>(&recv_buffer[4+40]);
+	applenum = *aplnum; 
+
+
+
+	
 
 	//delete message from buffer:
 	recv_buffer.erase(recv_buffer.begin(), recv_buffer.begin() + 4 + size);
@@ -146,9 +151,11 @@ void Game::remove_player(Player *player) {
 }
 
 void Game::update(float elapsed) {
+
+	
 	
 	// COLLISSION CHECK FOR TAG
-	int count  = 0;
+	/*int count  = 0;
 	float radius = 5.0f;
 	glm::vec3 curpos(0.0f);
 	Player client;
@@ -179,7 +186,7 @@ void Game::update(float elapsed) {
 			curpos = p.pos;
 		}
 		count ++;
-	}
+	} */
 
 }
 
@@ -200,7 +207,8 @@ void Game::send_state_message(Connection *connection_, Player *connection_player
 
 
 	auto send_player = [&](Player const &player) {
-
+		
+		
 		glm::highp_quat matrixrot = player.controls.playerrot;
 		glm::vec3 xyzpos = player.controls.playerpos;
 
@@ -208,8 +216,10 @@ void Game::send_state_message(Connection *connection_, Player *connection_player
 		connection.send(matrixrot);//16 BYTES
 		connection.send(player.controls.playeranim);
 		connection.send(player.controls.playerframe);
-
-
+		connection.send(player.controls.ateapple);
+		connection.send(player.controls.applenum);
+	
+	
 	};
 
 	//player count:
@@ -231,6 +241,7 @@ bool Game::recv_state_message(Connection *connection_) {
 	assert(connection_);
 	auto &connection = *connection_;
 	auto &recv_buffer = connection.recv_buffer;
+	
 
 
 	if (recv_buffer.size() < 4) return false;
@@ -242,9 +253,14 @@ bool Game::recv_state_message(Connection *connection_) {
 	//expecting complete message:
 	if (recv_buffer.size() < 4 + size) return false;
 
+
+
+
 	//copy bytes from buffer and advance position:
 	auto read = [&](auto *val) {
 		if (at + sizeof(*val) > size) {
+			std::cout<< int(at + sizeof(*val)) << std::endl;
+			std::cout << size<< std::endl;
 			throw std::runtime_error("Ran out of bytes reading state message.");
 		}
 		std::memcpy(val, &recv_buffer[4 + at], sizeof(*val));
@@ -262,7 +278,10 @@ bool Game::recv_state_message(Connection *connection_) {
 		read(&player.rot);
 		read(&player.playeranim);
 		read(&player.playerframe);
-
+		read(&player.ateapple);
+		read(&player.applenum);
+	
+		
 	}
 
 	if (at != size) throw std::runtime_error("Trailing data in state message.");
