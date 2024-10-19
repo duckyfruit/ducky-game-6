@@ -157,8 +157,15 @@ void setfont(char* test, glm::vec3 anchor,glm::uvec2 const &drawable_size, glm::
 
 GLuint background_meshes_for_lit_color_texture_program = 0;
 Load< MeshBuffer > background_meshes(LoadTagDefault, []() -> MeshBuffer const * {
-	MeshBuffer const *ret = new MeshBuffer(data_path("duckyanimations.pnct"));
+	MeshBuffer const *ret = new MeshBuffer(data_path("duckyloungeobjects.pnct"));
 	background_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
+	return ret;
+});
+
+GLuint floor_meshes_for_lit_color_texture_program = 0;
+Load< MeshBuffer > floor_meshes(LoadTagDefault, []() -> MeshBuffer const * {
+	MeshBuffer const *ret = new MeshBuffer(data_path("duckyloungefloor.pnct"));
+	floor_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
 	return ret;
 });
 
@@ -170,16 +177,44 @@ Load< MeshBuffer > ducky_meshes(LoadTagDefault, []() -> MeshBuffer const * {
 });
 
 WalkMesh const *walkmesh = nullptr;
-Load< WalkMeshes > phonebank_walkmeshes(LoadTagDefault, []() -> WalkMeshes const * {
-	WalkMeshes *ret = new WalkMeshes(data_path("duckyanimations.w"));
+Load< WalkMeshes > floor_walkmeshes(LoadTagDefault, []() -> WalkMeshes const * {
+	WalkMeshes *ret = new WalkMeshes(data_path("duckyloungefloor.w"));
 	walkmesh = &ret->lookup("WalkMesh");
 	return ret;
 });
 
-Load< Scene > ducky_scene(LoadTagDefault, []() -> Scene const * {
-	return new Scene(data_path("duckyanimations.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
+Load< Scene > ducky_scene_floor(LoadTagDefault, []() -> Scene const * {
+	return new Scene(data_path("duckyloungefloor.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
+		Mesh const &mesh = floor_meshes->lookup(mesh_name);
+
+		
+		//make a new title for drawable; character!
+		//if character drawable, emplace back transforms and do everything regularly,
+		//but send the character information to the server
+		//server will send back to players and 
+		if(mesh_name.find("nonrender") == -1 && mesh_name.find("bbox") == -1)
+		{
+			scene.drawables.emplace_back(transform);
+			Scene::Drawable &drawable = scene.drawables.back();
+
+			drawable.pipeline = lit_color_texture_program_pipeline;
+
+			drawable.pipeline.vao = floor_meshes_for_lit_color_texture_program;
+			drawable.pipeline.type = mesh.type; 
+			drawable.pipeline.start = mesh.start;
+			drawable.pipeline.count = mesh.count;
+		}
+
+
+	});
+});
+
+
+Load< Scene > ducky_scene_objects(LoadTagDefault, []() -> Scene const * {
+	return new Scene(data_path("duckyloungeobjects.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
 		Mesh const &mesh = background_meshes->lookup(mesh_name);
 
+		
 		//make a new title for drawable; character!
 		//if character drawable, emplace back transforms and do everything regularly,
 		//but send the character information to the server
@@ -201,7 +236,7 @@ Load< Scene > ducky_scene(LoadTagDefault, []() -> Scene const * {
 	});
 });
 
-PlayMode::PlayMode(Client &client_) : client(client_), scene(*ducky_scene) {
+PlayMode::PlayMode(Client &client_) : client(client_), mainscene(*ducky_scene_floor), objscene(*ducky_scene_objects) {
 	
 	//For every mesh with the tag "apple"
 	//put transform back and int (1) in a vector
@@ -226,7 +261,7 @@ PlayMode::PlayMode(Client &client_) : client(client_), scene(*ducky_scene) {
 
 	for(int x = 0; x < duckrun.numframes; x++) //duck idle
 	{
-		for (auto &transform : scene.transforms) {
+		for (auto &transform : mainscene.transforms) {
 			std::string frm = "frame";
 			int currfrm = x+ 1;
 			frm += std::to_string(currfrm);
@@ -273,7 +308,7 @@ PlayMode::PlayMode(Client &client_) : client(client_), scene(*ducky_scene) {
 
 	for(int x = 0; x < duckidle.numframes; x++) //duck idle
 	{
-		for (auto &transform : scene.transforms) {
+		for (auto &transform : mainscene.transforms) {
 			std::string frm = "frame";
 			int currfrm = x+ 1;
 			frm += std::to_string(currfrm);
@@ -294,7 +329,8 @@ PlayMode::PlayMode(Client &client_) : client(client_), scene(*ducky_scene) {
 
 	}
 
-	for (auto &transform : scene.transforms) {
+	for (auto &transform : mainscene.transforms) 
+	{
 		if (transform.name.find("Player") != -1) 
 			playertranslate = &transform;
 		else if(transform.name.find("animrot") != -1) 
@@ -302,13 +338,28 @@ PlayMode::PlayMode(Client &client_) : client(client_), scene(*ducky_scene) {
 			Scene::Transform*temp = &transform;
 			animrot =  &temp->rotation;
 		}
-		else if(transform.name.find("Apple") != -1) 
+		else if(transform.name.find("head") != -1)
 		{
-			applepos.emplace_back(&transform);
-			apples.emplace_back(uint8_t(1));
+			Scene::Transform*temp = &transform;
+			glm::vec4 transvec = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+			playerhead =  temp->make_local_to_world() * transvec;
+		}
+		else if(transform.name.find("bbox") != -1)
+		{
+			bbox = &transform;
 		}
 			
 	} 
+
+	for(auto &transform: objscene.transforms)
+	{
+		//if (transform.name.find("wall") != -1)
+		//{
+			wallpos.emplace_back(&transform);
+		//}
+	}
+
+
 
 
 	//for the transforms in the scene
@@ -316,20 +367,20 @@ PlayMode::PlayMode(Client &client_) : client(client_), scene(*ducky_scene) {
 	//emplace back transform in applepos vector
 	//emplace back int 1 in apple vetor
 
-	scene.transforms.emplace_back();
-	scene.cameras.emplace_back(&scene.transforms.back());
-	player.camera = &scene.cameras.back();
+	mainscene.transforms.emplace_back();
+	mainscene.cameras.emplace_back(&mainscene.transforms.back());
+	player.camera = &mainscene.cameras.back();
 	player.camera->fovy = glm::radians(60.0f);
 	player.camera->near = 0.01f;
 
-	scene.transforms.emplace_back();
-	player.transform = &scene.transforms.back();
+	mainscene.transforms.emplace_back();
+	player.transform = &mainscene.transforms.back();
 
-	scene.transforms.emplace_back();
-	camrotate = &scene.transforms.back();
+	mainscene.transforms.emplace_back();
+	camrotate = &mainscene.transforms.back();
 
-	scene.transforms.emplace_back();
-	camtranslate = &scene.transforms.back();
+	mainscene.transforms.emplace_back();
+	camtranslate = &mainscene.transforms.back();
 
 
 	player.transform->parent = playertranslate;
@@ -438,15 +489,14 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 }
 
 void PlayMode::update(float elapsed) {
-	controls.ateapple = 0;
-	controls.applenum = -1;
+
 	//player walking:
 	{
 		//combine inputs into a move:
 		playeranimtimer += elapsed;
 
 		animtype = 0;
-		constexpr float PlayerSpeed = 20.0f;
+		constexpr float PlayerSpeed = 35.0f;
 		glm::vec2 move = glm::vec2(0.0f);
 		if (controls.left.pressed && !controls.right.pressed) move.x =1.0f;
 		if (!controls.left.pressed && controls.right.pressed) move.x = -1.0f;
@@ -559,130 +609,222 @@ void PlayMode::update(float elapsed) {
 
 			for(int x = 0; x < duckrun.numframes; x++) //duck idle
 			{
-				for(int y =0; y<duckrun.frames[x].size(); y++)
+				for (int y = 0; y < duckrun.frames[x].size(); y++)
 				{
 					duckrun.frames[x][y]->scale = glm::vec3(0.0f);
 				}
-				
-			} 
+
+			}
 
 			duckrotated = false;
-		} 
-		
+		}
+
 
 		//make it so that moving diagonally doesn't go faster:
 		if (move != glm::vec2(0.0f)) move = glm::normalize(move) * PlayerSpeed * elapsed;
 
 		//get move in world coordinate system:
-		
+
 		//trycamrotate sometime!
-		glm::vec3 remain = player.transform ->make_local_to_world() * glm::vec4(move.x, move.y, 0.0f, 0.0f);
+		bool canmove = true;
+		glm::vec3 remain = playertranslate->make_local_to_world() * glm::vec4(move.x, move.y, 0.0f, 0.0f);
+
+		//collission check with remain!	
+		{
+			glm::vec4 transvec = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+			auto inside = [](glm::vec3 point,  glm::vec3 bboxmin, glm::vec3 bboxmax)
+			{
+				
+				glm::vec3 cent = (bboxmin + bboxmax)/2.0f; //get the center of bbox
+				glm::vec3 dx = glm::normalize(bboxmax - glm::vec3(bboxmin.x,bboxmax.y,bboxmax.z)); //unit vectors in direction of bbox sides for 
+				glm::vec3 dy = glm::normalize(bboxmax - glm::vec3(bboxmax.x,bboxmin.y,bboxmax.z)); //x, y, & z
+				glm::vec3 dz = glm::normalize(bboxmax - glm::vec3(bboxmax.x,bboxmax.y,bboxmin.z));
+				glm::vec3 half = glm::vec3(glm::length(bboxmin.x-cent.x), glm::length(bboxmin.y-cent.y), glm::length(bboxmin.z-cent.z));
+
+				return(abs(dot(point - cent,dx)) <= half.x && abs(dot(point - cent,dy)) <= half.y && abs(dot(point - cent,dz)) <= half.z );
+			};
+
+			for (int i = 0; i < wallpos.size(); i++)
+			{
+
+				//if bbox.min || bbox.max is inside the square, collission is true 
+				if(inside(floor_meshes->lookup(bbox->name).min + (bbox->make_local_to_world()*transvec + remain), background_meshes->lookup(wallpos[i]->name).min + wallpos[i]->position, background_meshes->lookup(wallpos[i]->name).max + wallpos[i]->position) ||
+				inside(floor_meshes->lookup(bbox->name).max + (bbox->make_local_to_world()*transvec + remain), background_meshes->lookup(wallpos[i]->name).min + wallpos[i]->position, background_meshes->lookup(wallpos[i]->name).max + wallpos[i]->position))
+					canmove = false;
+				
+			}
+
+		}
 
 		//using a for() instead of a while() here so that if walkpoint gets stuck in
 		// some awkward case, code will not infinite loop:
 
+		if(canmove)
+		{
+			for (uint32_t iter = 0; iter < 10; ++iter) {
+				if (remain == glm::vec3(0.0f)) break;
+				WalkPoint end;
+				float time;
 
-		for (uint32_t iter = 0; iter < 10; ++iter) {
-			if (remain == glm::vec3(0.0f)) break;
-			WalkPoint end;
-			float time;
-			
-			walkmesh->walk_in_triangle(player.at, remain, &end, &time);
-			
-			
-			player.at = end;
-			
-				
-			if (time == 1.0f) {
-				//finished within triangle:
-				
-			
-				remain = glm::vec3(0.0f);
-		
-				break;
-			}
-			//some step remains:
-			
-			remain *= (1.0f - time);
-			//try to step over edge:
-			glm::quat rotation;
-			if (walkmesh->cross_edge(player.at, &end, &rotation)) {
-				//stepped to a new triangle:
+				walkmesh->walk_in_triangle(player.at, remain, &end, &time);
+
+
 				player.at = end;
-				
-				//rotate step to follow surface:
-				remain = rotation * remain;
-			} else {
-				//ran into a wall, bounce / slide along it:
-				glm::vec3 const &a = walkmesh->vertices[player.at.indices.x];
-				glm::vec3 const &b = walkmesh->vertices[player.at.indices.y];
-				glm::vec3 const &c = walkmesh->vertices[player.at.indices.z];
-				glm::vec3 along = glm::normalize(b-a);
-				glm::vec3 normal = glm::normalize(glm::cross(b-a, c-a));
-				glm::vec3 in = glm::cross(normal, along);
+                    
 
-				//check how much 'remain' is pointing out of the triangle:
-				float d = glm::dot(remain, in);
-				if (d < 0.0f) {
-					//bounce off of the wall:
-					remain += (-1.25f * d) * in;
-				} else {
-					//if it's just pointing along the edge, bend slightly away from wall:
-					remain += 0.01f * d * in;
+				if (time == 1.0f) {
+					//finished within triangle:
+
+
+					remain = glm::vec3(0.0f);
+
+					break;
+				}
+				//some step remains:
+
+				remain *= (1.0f - time);
+				//try to step over edge:
+				glm::quat rotation;
+				if (walkmesh->cross_edge(player.at, &end, &rotation)) {
+					//stepped to a new triangle:
+					player.at = end;
+
+					//rotate step to follow surface:
+					remain = rotation * remain;
+				}
+				else {
+					//ran into a wall, bounce / slide along it:
+					glm::vec3 const& a = walkmesh->vertices[player.at.indices.x];
+					glm::vec3 const& b = walkmesh->vertices[player.at.indices.y];
+					glm::vec3 const& c = walkmesh->vertices[player.at.indices.z];
+					glm::vec3 along = glm::normalize(b - a);
+					glm::vec3 normal = glm::normalize(glm::cross(b - a, c - a));
+					glm::vec3 in = glm::cross(normal, along);
+
+					//check how much 'remain' is pointing out of the triangle:
+					float d = glm::dot(remain, in);
+					if (d < 0.0f) {
+						//bounce off of the wall:
+						remain += (-1.25f * d) * in;
+					}
+					else {
+						//if it's just pointing along the edge, bend slightly away from wall:
+						remain += 0.01f * d * in;
+					}
 				}
 			}
-		}
 
-		if (remain != glm::vec3(0.0f)) {
-			std::cout << "NOTE: code used full iteration budget for walking." << std::endl;
-		}
+			if (remain != glm::vec3(0.0f)) {
+				std::cout << "NOTE: code used full iteration budget for walking." << std::endl;
+			}
 
-		//update player's position to respect walking:
+			//update player's position to respect walking:
+
+			playertranslate->position = walkmesh->to_world_point(player.at);
+
+
+			{ //update player's rotation to respect local (smooth) up-vector:
+
+
+				glm::quat adjust = glm::rotation(
+					player.transform->rotation * glm::vec3(0.0f, 0.0f, 1.0f), //current up vector
+					walkmesh->to_world_smooth_normal(player.at) //smoothed up vector at walk location
+				);
+
+				player.transform->rotation = glm::normalize(adjust * player.transform->rotation);
+
+
+			}
+
+		}
+	}
+
+	
+	//camera check (if a wall is between the camera and player, set the wall to be invisible) //really awful raycasting		
+	{
+		glm::vec4 transvec = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+		//glm::vec3 playerhead = glm::vec3(playertranslate->position.x, playertranslate->position.y, camtranslate->position.z);
+		glm::vec3 ray = glm::normalize(playerhead - (camtranslate->make_local_to_world() * transvec));
+		glm::vec3 o = camtranslate->make_local_to_world() * transvec;
+		glm::vec3 point = o; //start at origin
+		float step = 0.1f;
+		float t = 0.0f;
+		bool inbetween = false;
+		//for all the walls in the scene, if it is between cam rotate and player translate, set 
+		//scale to 0
+		//else, set scale to 1
+		//float magn = glm::length(playertranslate->position - (camtranslate->make_local_to_world() * transvec)); //maagnitude of the distance from playertrans pos 
+																												//to camapos
 		
-		playertranslate->position = walkmesh->to_world_point(player.at);
+
+		auto inside = [](glm::vec3 point,  glm::vec3 bboxmin, glm::vec3 bboxmax)
+		{
+			
+			glm::vec3 cent = (bboxmin + bboxmax)/2.0f; //get the center of bbox
+			glm::vec3 dx = glm::normalize(bboxmax - glm::vec3(bboxmin.x,bboxmax.y,bboxmax.z)); //unit vectors in direction of bbox sides for 
+			glm::vec3 dy = glm::normalize(bboxmax - glm::vec3(bboxmax.x,bboxmin.y,bboxmax.z)); //x, y, & z
+			glm::vec3 dz = glm::normalize(bboxmax - glm::vec3(bboxmax.x,bboxmax.y,bboxmin.z));
+			glm::vec3 half = glm::vec3(glm::length(bboxmin.x-cent.x), glm::length(bboxmin.y-cent.y), glm::length(bboxmin.z-cent.z));
+
+			return(abs(dot(point - cent,dx)) <= half.x && abs(dot(point - cent,dy)) <= half.y && abs(dot(point - cent,dz)) <= half.z );
+
+		};
 
 
-		{ //update player's rotation to respect local (smooth) up-vector:
+		for (int i = 0; i < wallpos.size(); i++)
+		{
+			inbetween = false;
+			t = 0.0f;
+			point  = o;
+
 			
 			
-			glm::quat adjust = glm::rotation(
-				player.transform ->rotation * glm::vec3(0.0f, 0.0f, 1.0f), //current up vector
-				walkmesh->to_world_smooth_normal(player.at) //smoothed up vector at walk location
-			);
-
-			player.transform->rotation = glm::normalize(adjust * player.transform->rotation);
+			//find whether an object is between 
+			//keep going along the ray
+			//if the point is within the bounding box, exit the loop and set the wall to invisible
+			//if not, set the wall to be not invisible
+			
 			
 
-		}  
+			while (abs(point - o).x  < abs(playerhead - (camtranslate->make_local_to_world() * transvec)).x &&
+				   abs(point - o).y  < abs(playerhead - (camtranslate->make_local_to_world() * transvec)).y && 
+				   abs(point - o).z  < abs(playerhead - (camtranslate->make_local_to_world() * transvec)).z && !inbetween)  
+			{
+				//std::cout << "wall name " << wallpos[i] ->name << std::endl;
+				
+				point = o + t * ray;
+				if (inside(point, background_meshes->lookup(wallpos[i]->name).min + wallpos[i]->position, background_meshes->lookup(wallpos[i]->name).max + wallpos[i]->position))
+				{
+					//set scale to 0
+					inbetween = true;
+					
+				}
 
+				t += step;
+
+			}
+
+			if(inbetween)
+			{
+				wallpos[i]->scale = glm::vec3(0.0f);
+				//std::cout << "wall name " << wallpos[i] ->name << std::endl;
+			}
+			else
+			{
+				wallpos[i]->scale = glm::vec3(1.0f);
+				//std::cout << "wall name " << wallpos[i] ->name << std::endl;
+			}
+				
+
+
+		}
 	}
 	
-	//player touches apple
-	{
-		for(int i = 0; i < applepos.size(); i++)
-		{
-			float radius = 20.0f;
-			if(playertranslate->position.x > applepos[i]->position.x - radius &&
-			playertranslate->position.x < applepos[i]->position.x + radius &&
-			playertranslate->position.y > applepos[i]->position.y - radius &&
-			playertranslate->position.y < applepos[i]->position.y + radius&& 
-			apples[i] == 1 )
-			{
-				apples[i] = uint8_t(0);
-				applepos[i]->scale = glm::vec3(0.0f);
-				std::cout << glm::to_string(playertranslate->position) << std::endl;
-				std::cout << glm::to_string(applepos[i]->position) << std::endl;
-				std::cout<<std::endl;
-				controls.ateapple = 1;
-				controls.applenum = i;
-				score += 1;
-			}
-		}
-	} 
+
+	//collission check (simple bbox)
 	
-	//if player position is within range of apple & apple is not 0 in apple vector
-	//make apple 0 in apple vector 
-	//set scale apple to 0
+	
+
 	
 	
 	controls.playerpos = playertranslate->position;
@@ -708,8 +850,6 @@ void PlayMode::update(float elapsed) {
 	controls.up.downs = 0;
 	controls.down.downs = 0;
 	controls.jump.downs = 0;
-	controls.ateapple = 0;
-	controls.applenum = -1;
 
 
 
@@ -763,7 +903,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 			std::string getframe;
 
 			int frame = p.playerframe + 1;
-			std::cout << frame << std::endl;
+
 			if(p.playeranim == 1)
 			{
 				if(frame > 13)
@@ -780,12 +920,12 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 				
 			mesh = ducky_meshes->lookup(getframe);
 			
-			scene.transforms.emplace_back();
-			scene.transforms.back().position = p.pos;
-			scene.transforms.back().rotation = p.rot;
+			mainscene.transforms.emplace_back();
+			mainscene.transforms.back().position = p.pos;
+			mainscene.transforms.back().rotation = p.rot;
 			{
-				scene.drawables.emplace_back(&scene.transforms.back());
-				Scene::Drawable &drawable = scene.drawables.back();
+				mainscene.drawables.emplace_back(&mainscene.transforms.back());
+				Scene::Drawable &drawable = mainscene.drawables.back();
 				drawable.pipeline = lit_color_texture_program_pipeline;
 				drawable.pipeline.vao = ducky_meshes_for_lit_color_texture_program; 
 				drawable.pipeline.type = mesh.type; 
@@ -794,19 +934,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 			}
 
 		
-			if(p.ateapple == 1)
-			{
-				if(p.applenum >= 0)
-				{
-					apples[p.applenum] = 0;
-					applepos[p.applenum]->scale = glm::vec3(0.0f);
-
-				}
-				
-			} 
 			
-		
-
 
 		}
 		pcount ++;
@@ -819,7 +947,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	// TODO: consider using the Light(s) in the scene to do this
 	glUseProgram(lit_color_texture_program->program);
 	glUniform1i(lit_color_texture_program->LIGHT_TYPE_int, 1);
-	glUniform3fv(lit_color_texture_program->LIGHT_DIRECTION_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f,1.0f)));
+	glUniform3fv(lit_color_texture_program->LIGHT_DIRECTION_vec3, 1, glm::value_ptr(glm::vec3(-1.0f, -1.0f,1.0f)));
 	glUniform3fv(lit_color_texture_program->LIGHT_ENERGY_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 0.95f)));
 	glUseProgram(0);
 
@@ -830,8 +958,8 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS); //this is the default depth comparison function, but FYI you can change it.
 
-	scene.draw(*player.camera);
-
+	mainscene.draw(*player.camera);
+	objscene.draw(*player.camera);
 
 	{ //use DrawLines to overlay some text:
 		glDisable(GL_DEPTH_TEST);
@@ -851,8 +979,8 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 
 	for(int i = 0; i < pcount - 1; i++)
 	{
-		scene.drawables.pop_back();
-		scene.transforms.pop_back();
+		mainscene.drawables.pop_back();
+		mainscene.transforms.pop_back();
 
 	}
 	

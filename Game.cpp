@@ -21,7 +21,7 @@ void Player::Controls::send_controls_message(Connection *connection_) const {
 	assert(connection_);
 	auto &connection = *connection_;
 
-	uint32_t size = 44;
+	uint32_t size = 36;
 
 	
 	connection.send(Message::C2S_Controls);
@@ -45,8 +45,6 @@ void Player::Controls::send_controls_message(Connection *connection_) const {
 	connection.send(playerrot.z); 
 	connection.send(playeranim);
 	connection.send(playerframe);
-	connection.send(ateapple);
-	connection.send(applenum);
 
 }
 
@@ -63,7 +61,7 @@ bool Player::Controls::recv_controls_message(Connection *connection_) {
 	uint32_t size = (uint32_t(recv_buffer[3]) << 16)
 	              | (uint32_t(recv_buffer[2]) << 8)
 	              |  uint32_t(recv_buffer[1]);
-	if (size != 44) throw std::runtime_error("Controls message with size " + std::to_string(size) + " != 48!");
+	if (size != 36) throw std::runtime_error("Controls message with size " + std::to_string(size) + " != 48!");
 	
 	//expecting complete message:
 	if (recv_buffer.size() < 4 + size) return false;
@@ -102,13 +100,7 @@ bool Player::Controls::recv_controls_message(Connection *connection_) {
 	playeranim = *anim;
 	int* frame = reinterpret_cast<int*>(&recv_buffer[4+32]);
 	playerframe = *frame;
-   
-	int* ate = reinterpret_cast<int*>(&recv_buffer[4+36]);
-	ateapple = *ate;
 
-
-	int* aplnum = reinterpret_cast<int*>(&recv_buffer[4+40]);
-	applenum = *aplnum; 
 
 
 
@@ -132,8 +124,6 @@ Player *Game::spawn_player() {
 	
 	players.emplace_back();
 	Player &player = players.back();
-	player.duck.setTransforms();
-	player.duck.setAnimations();
 	return &player;
 }
 
@@ -154,39 +144,7 @@ void Game::update(float elapsed) {
 
 	
 	
-	// COLLISSION CHECK FOR TAG
-	/*int count  = 0;
-	float radius = 5.0f;
-	glm::vec3 curpos(0.0f);
-	Player client;
-	for (auto &p : players)
-	{
-		if(count > 0)
-		{
-			if((p.pos.x > curpos.x - radius) && 
-			   (p.pos.x < curpos.x + radius) &&
-			   (p.pos.y > curpos.y - radius) && 
-			   (p.pos.y < curpos.y + radius))
-			{
-				if(p.it) //if the other player is it, the client becomes it
-				{
-					client.it = true;//client becomes it
-					p.it = false;//player is not it anymore
-				}
-				else if(client.it)
-				{
-					client.it = false; //client is not it anymore
-					p.it = true; //player becomes it
-				}
-			}
-		}
-		else
-		{
-			client = p;
-			curpos = p.pos;
-		}
-		count ++;
-	} */
+
 
 }
 
@@ -216,9 +174,7 @@ void Game::send_state_message(Connection *connection_, Player *connection_player
 		connection.send(matrixrot);//16 BYTES
 		connection.send(player.controls.playeranim);
 		connection.send(player.controls.playerframe);
-		connection.send(player.controls.ateapple);
-		connection.send(player.controls.applenum);
-	
+
 	
 	};
 
@@ -278,8 +234,7 @@ bool Game::recv_state_message(Connection *connection_) {
 		read(&player.rot);
 		read(&player.playeranim);
 		read(&player.playerframe);
-		read(&player.ateapple);
-		read(&player.applenum);
+
 	
 		
 	}

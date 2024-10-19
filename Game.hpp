@@ -34,8 +34,7 @@ struct Player {
 		glm::highp_quat playerrot;
 		int playeranim;
 		int playerframe;
-		int ateapple;
-		int applenum;
+	
 
 		void send_controls_message(Connection *connection) const;
 
@@ -50,9 +49,7 @@ struct Player {
 	int ateapple;
 	int playeranim;
 	int playerframe;
-	int applenum;
 
-	Duck duck;
 
 	//position & rotation
 	//player state (sent from server):

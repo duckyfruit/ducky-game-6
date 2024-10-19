@@ -53,13 +53,17 @@ struct PlayMode : Mode {
 	//----- game state -----
 
 	//local copy of the game scene (so code can change it during gameplay):
-	Scene scene;
-	glm::highp_quat rotatecam;
-	glm::highp_quat origcamrot;
-	Scene::Transform *playertranslate;
-	Scene::Transform *camrotate;
-	Scene::Transform *camtranslate;
-	glm::highp_quat duckheadrotate;
+	Scene mainscene;
+	Scene objscene;
+	
+	glm::highp_quat rotatecam; //set camera rotate 
+	glm::highp_quat origcamrot; //past camera rotate
+	Scene::Transform *playertranslate; //translation of player
+	Scene::Transform *camrotate; //rotation of camera
+	Scene::Transform *camtranslate; //translation of camera
+	Scene::Transform *bbox; //bounding box of player for collision detection
+	glm::highp_quat duckheadrotate; //rotation of player head
+	glm::vec3 playerhead; //position of the head of the player
 
 	float rotateholdx;
 	bool duckrotated = false;
@@ -69,8 +73,8 @@ struct PlayMode : Mode {
 	int animtype;
 	int animframe;
 
-	std::vector<uint8_t> apples;
-	std::vector<Scene::Transform*> applepos;
+	
+	std::vector<Scene::Transform*> wallpos;
 
 	int score = 0;
 
